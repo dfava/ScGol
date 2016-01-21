@@ -1,3 +1,7 @@
+/** Game of Life
+* @author Daniel Fava
+# http://github.com/dfava
+*/
 import scala.util.Random
 import scala.io.Source
 
