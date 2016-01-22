@@ -8,7 +8,7 @@ import scala.io.Source
 abstract class Board(param : Either[String, (Double, Int)]) {
     // Create a board by either reading a file (String with file name) 
     // or randomly (Double with prob, and int with board size)
-    var cells : Array[Array[Char]] = param match {
+    private val startingCells : Array[Array[Char]] = param match {
         case Left(fname) => 
             { (for (line <- Source.fromFile(fname).getLines()) yield line.toCharArray).toArray }
         case Right((prob, size)) => {
@@ -16,24 +16,30 @@ abstract class Board(param : Either[String, (Double, Int)]) {
             for { row <- Array.ofDim[Char](size, size) } yield randRow(prob, size)
         }
     }
-    val neighbors = for {row <- 0 to cells.length-1} yield // Compute and store indexes of all neighbors
-            for {col <- 0 to cells.length-1} yield createNeighborList(row, col)
+    val size = startingCells.length
+    val altCells = List(startingCells, Array.ofDim[Char](size, size))
+    private var iteration = 0
+    var cells = startingCells // point to either altCells(0) or altCells(1) depending on iteration
+
+    private val neighbors = for {row <- 0 to size-1} yield // Compute and store indexes of all neighbors
+            for {col <- 0 to size-1} yield createNeighborList(row, col)
 
     private def randRow(prob : Double, size : Int) : Array[Char] = { // Creates a row of cells randomly
         for { col <- Array.ofDim[Char](size) } yield if (Random.nextDouble() > prob) '.' else 'X'
     }
 
     def update() { // Update a board's configuration according to its neighbors score
-        var newCells = Array.ofDim[Char](cells.length, cells.length)
-        for {row <- 0 to cells.length-1} {
-            newCells(row) = Array.ofDim[Char](cells.length)
-            for {col <- 0 to cells.length-1} {
+        for {row <- 0 to size-1} {
+            for {col <- 0 to size-1} {
                 var score = 0.0
-                for {n <- neighbors(row)(col)} { score += (if (cells(n._1)(n._2) == '.') 0 else 1 * n._3) }
-                newCells(row)(col) = nextCellState(row, col, score)
+                for {n <- neighbors(row)(col)} {
+                    score += (if (altCells(iteration % 2)(n._1)(n._2) == '.') 0 else 1 * n._3)
+                }
+                altCells((iteration+1) % 2)(row)(col) = nextCellState(row, col, score)
             }
         }
-        cells = newCells
+        cells = altCells((iteration+1) %2)
+        iteration += 1
     }
 
     def createNeighborList(cellRow : Int, cellCol : Int) : List[(Int, Int, Double)]
@@ -50,7 +56,7 @@ class BoardR8(param : Either[String, (Double, Int)]) extends Board(param) {
             if !(offsetRow == 0 && offsetCol == 0)
             row = cellRow + offsetRow
             col = cellCol + offsetCol
-            if row >= 0 && col >= 0 && row < cells.length && col < cells.length
+            if row >= 0 && col >= 0 && row < size && col < size
         } yield (row,col,1.0)).toList
     }
 
@@ -73,11 +79,11 @@ class BoardRH6(param : Either[String, (Double, Int)]) extends BoardR8(param) {
             if !(cellRow % 2 == 1 && List((-1,-1), (1,-1)).contains((offsetRow, offsetCol)))
             row = cellRow + offsetRow
             col = cellCol + offsetCol
-            if row >= 0 && col >= 0 && row < cells.length && col < cells.length
+            if row >= 0 && col >= 0 && row < size && col < size 
         } yield (row,col,1.0)).toList
     }
 
-    override def toString() = { (for { rowIdx <- 0 to cells.length-1 }
+    override def toString() = { (for { rowIdx <- 0 to size-1 }
             yield (if (rowIdx % 2 == 1) " " else "") + cells(rowIdx).mkString(" ")).mkString("\n") }
 }
 
@@ -89,9 +95,9 @@ class BoardRH12(param : Either[String, (Double, Int)]) extends BoardRH6(param) {
                 (if (cellRow % 2 == 0) List((cellRow-1, cellCol-2), (cellRow-1, cellCol+1), (cellRow+1, cellCol-2), (cellRow+1, cellCol+1)) 
                     else List((cellRow-1, cellCol-1), (cellRow-1, cellCol+2), (cellRow+1, cellCol-1), (cellRow+1, cellCol+2)))
         super.createNeighborList(cellRow, cellCol) ++
-            (for { // Make sure tier2 is still within the board (i.e. it isn't below 0 or above cells.length)
+            (for { // Make sure tier2 is still within the board (i.e. it isn't below 0 or above size)
                 (row, col) <- tier2
-                if row >= 0 && col >= 0 && row < cells.length && col < cells.length
+                if row >= 0 && col >= 0 && row < size && col < size 
             } yield (row, col, 0.3))
     }
 
